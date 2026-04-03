@@ -1,0 +1,5 @@
+{
+  "title": "Test Post via Social Bot",
+  "body": "This is a test from the Social Bot control API",
+  "platformTargets": ["FACEBOOK"]
+}

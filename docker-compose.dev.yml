@@ -1,0 +1,296 @@
+version: '3.9'
+
+# ─── Networks ────────────────────────────────────────────────
+networks:
+  social-bot-net:
+    driver: bridge
+
+# ─── Volumes ─────────────────────────────────────────────────
+volumes:
+  postgres-data:
+  uploads-data:
+  n8n-data:
+  postiz-data:
+  temporal-pg-data:
+  temporal-es-data:
+
+# ─── Services ────────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-socialbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-socialbot}
+      POSTGRES_DB: ${POSTGRES_DB:-socialbot}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"  # PostgreSQL → localhost:5432
+    networks:
+      - social-bot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-socialbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"  # Redis → localhost:6379
+    networks:
+      - social-bot-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Control API ───────────────────────────────────────────
+  control-api:
+    build:
+      context: .
+      dockerfile: infra/docker/control-api.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-socialbot}:${POSTGRES_PASSWORD:-socialbot}@postgres:5432/${POSTGRES_DB:-socialbot}
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+    ports:
+      - "${CONTROL_API_PORT:-4000}:4000"  # Control API → localhost:4000 (Swagger: /api/v1/docs)
+    volumes:
+      - uploads-data:/data/uploads
+      # Hot reload in dev: mount source
+      - ./apps/control-api/src:/app/apps/control-api/src:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - social-bot-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Dashboard Web ─────────────────────────────────────────
+  dashboard-web:
+    build:
+      context: .
+      dockerfile: infra/docker/dashboard-web.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:${CONTROL_API_PORT:-4000}/api/v1
+      NODE_ENV: development
+    ports:
+      - "${DASHBOARD_WEB_PORT:-3000}:3000"  # Dashboard UI → localhost:3000
+    depends_on:
+      - control-api
+    networks:
+      - social-bot-net
+
+  # ── AI Worker ─────────────────────────────────────────────
+  ai-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/ai-worker.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-socialbot}:${POSTGRES_PASSWORD:-socialbot}@postgres:5432/${POSTGRES_DB:-socialbot}
+      NODE_ENV: development
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - social-bot-net
+
+  # ── n8n ───────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-changeme}
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: 5678
+      WEBHOOK_URL: http://localhost:${N8N_PORT:-5678}
+      GENERIC_TIMEZONE: UTC
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-socialbot}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-socialbot}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-socialbot}
+      DB_POSTGRESDB_SCHEMA: n8n
+    ports:
+      - "${N8N_PORT:-5678}:5678"  # n8n → localhost:5678
+    volumes:
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - social-bot-net
+
+  # ── Temporal: dedicated PostgreSQL ────────────────────────
+  temporal-postgresql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - temporal-pg-data:/var/lib/postgresql/data
+    networks:
+      - social-bot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Temporal: Elasticsearch (required for full visibility) ─
+  temporal-elasticsearch:
+    image: elasticsearch:7.17.27
+    restart: unless-stopped
+    environment:
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+      - xpack.security.enabled=false
+    volumes:
+      - temporal-es-data:/usr/share/elasticsearch/data
+    networks:
+      - social-bot-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── Temporal ──────────────────────────────────────────────
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    restart: unless-stopped
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal-postgresql
+      - ENABLE_ES=true
+      - ES_SEEDS=temporal-elasticsearch
+      - ES_VERSION=v7
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - TEMPORAL_NAMESPACE=default
+    volumes:
+      - ./infra/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+    ports:
+      - "7233:7233"  # Temporal gRPC → localhost:7233
+    depends_on:
+      temporal-postgresql:
+        condition: service_healthy
+      temporal-elasticsearch:
+        condition: service_healthy
+    networks:
+      - social-bot-net
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ── Nginx Proxy (Routes /uploads to nginx-uploads) ─────────
+  nginx-proxy:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "4200:80"  # Postiz UI with upload proxy → http://localhost:4200
+    volumes:
+      - ./infra/nginx/postiz-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - postiz
+      - nginx-uploads
+    networks:
+      - social-bot-net
+
+  # ── Nginx (Static File Server for Uploads) ────────────────
+  nginx-uploads:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - postiz-data:/usr/share/nginx/html/uploads:ro
+    networks:
+      - social-bot-net
+    command: >
+      sh -c "
+      mkdir -p /usr/share/nginx/html/uploads &&
+      nginx -g 'daemon off;'
+      "
+
+  # ── Postiz ────────────────────────────────────────────────
+  postiz:
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-socialbot}:${POSTGRES_PASSWORD:-socialbot}@postgres:5432/postiz
+      REDIS_URL: redis://redis:6379
+      # Internal URL for server-side Next.js → backend calls (container DNS)
+      BACKEND_INTERNAL_URL: http://postiz:3000
+      # Public URL the BROWSER uses to call the backend — must be host-reachable
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3001
+      FRONTEND_URL: http://postiz:4200
+      MAIN_URL: http://localhost:4200
+      IS_GENERAL: "true"
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      TEMPORAL_ADDRESS: temporal:7233
+      # Storage Configuration (required for media uploads)
+      STORAGE_PROVIDER: local
+      UPLOAD_DIRECTORY: /uploads
+      NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: http://localhost:4200
+      # OAuth Credentials (see docs/POSTIZ_OAUTH_SETUP.md)
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+      INSTAGRAM_APP_ID: ${INSTAGRAM_APP_ID:-}
+      INSTAGRAM_APP_SECRET: ${INSTAGRAM_APP_SECRET:-}
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-}
+      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-}
+      TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID:-}
+      TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET:-}
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+    ports:
+      - "3001:3000"  # Postiz API → http://localhost:3001
+    expose:
+      - "4200"  # Internal port for nginx-proxy
+    volumes:
+      - postiz-data:/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    networks:
+      - social-bot-net

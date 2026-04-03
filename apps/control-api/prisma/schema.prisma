@@ -1,0 +1,326 @@
+// This is your Prisma schema file.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum ContentDraftStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+enum SocialProvider {
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  TWITTER
+  LINKEDIN
+  YOUTUBE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  OTHER
+}
+
+enum ActionLogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+enum AutomationStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum AIPolicyAction {
+  GENERATE_CAPTION
+  SUGGEST_HASHTAGS
+  TRANSLATE
+  REVIEW_CONTENT
+  PLAN_ACTIONS
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+enum ActionOutcome {
+  SUCCESS
+  FAILURE
+  PENDING
+}
+
+// ─── Models ──────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name     String  @unique
+  slug     String  @unique
+  logoUrl  String?
+  settings Json    @default("{}")
+
+  workspaces  Workspace[]
+  members     Member[]
+  actionLogs  ActionLog[]
+
+  @@map("organizations")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members           Member[]
+  roleBindings      RoleBinding[]
+  socialConnections SocialConnection[]
+  assets            Asset[]
+  contentDrafts     ContentDraft[]
+  automationRuns    AutomationRun[]
+  aiPolicies        AIPolicy[]
+  actionLogs        ActionLog[]
+
+  @@unique([organizationId, slug])
+  @@map("workspaces")
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String
+  userId         String
+  email          String
+  displayName    String
+  avatarUrl      String?
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspaces    Workspace[]
+  roleBindings  RoleBinding[]
+
+  @@unique([organizationId, userId])
+  @@map("members")
+}
+
+model RoleBinding {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberId    String
+  workspaceId String
+  role        MemberRole
+
+  member    Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, workspaceId])
+  @@map("role_bindings")
+}
+
+model SocialConnection {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId          String
+  provider             SocialProvider
+  postizIntegrationId  String         @unique
+  displayName          String
+  profileUrl           String?
+  avatarUrl            String?
+  status               ConnectionStatus @default(ACTIVE)
+  lastSyncAt           DateTime?
+  metadata             Json           @default("{}")
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  publishTargets PublishTarget[]
+
+  @@map("social_connections")
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId    String
+  uploadedById   String
+  filename       String
+  originalName   String
+  mimeType       String
+  size           Int
+  assetType      AssetType
+  storagePath    String
+  publicUrl      String?
+  postizMediaId  String?
+  metadata       Json      @default("{}")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("assets")
+}
+
+model ContentDraft {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId     String
+  createdById     String
+  title           String
+  body            String
+  status          ContentDraftStatus @default(DRAFT)
+  platformTargets SocialProvider[]
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  metadata        Json               @default("{}")
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  publishTargets   PublishTarget[]
+  approvalRequests ApprovalRequest[]
+
+  @@map("content_drafts")
+}
+
+model PublishTarget {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentDraftId     String
+  socialConnectionId String
+  postizPostId       String?
+  status             ContentDraftStatus @default(DRAFT)
+  scheduledAt        DateTime?
+  publishedAt        DateTime?
+  errorMessage       String?
+  analyticsSnapshot  Json               @default("{}")
+
+  contentDraft    ContentDraft    @relation(fields: [contentDraftId], references: [id], onDelete: Cascade)
+  socialConnection SocialConnection @relation(fields: [socialConnectionId], references: [id])
+
+  @@map("publish_targets")
+}
+
+model ApprovalRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentDraftId String
+  requestedById  String
+  reviewedById   String?
+  status         ApprovalStatus @default(PENDING)
+  notes          String?
+  reviewedAt     DateTime?
+
+  contentDraft ContentDraft @relation(fields: [contentDraftId], references: [id], onDelete: Cascade)
+
+  @@map("approval_requests")
+}
+
+model ActionLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  organizationId String?
+  workspaceId    String?
+  actorId        String?
+  level          ActionLogLevel
+  action         String
+  resourceType   String?
+  resourceId     String?
+  payload        Json           @default("{}")
+  outcome        ActionOutcome
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([action])
+  @@map("action_logs")
+}
+
+model AutomationRun {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId     String
+  triggeredBy     String
+  n8nExecutionId  String?
+  workflowName    String
+  status          AutomationStatus
+  startedAt       DateTime         @default(now())
+  finishedAt      DateTime?
+  errorMessage    String?
+  payload         Json             @default("{}")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("automation_runs")
+}
+
+model AIPolicy {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId String
+  name        String
+  action      AIPolicyAction
+  prompt      String
+  model       String?
+  enabled     Boolean        @default(true)
+  config      Json           @default("{}")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("ai_policies")
+}
