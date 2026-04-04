@@ -9,8 +9,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@social-bot/domain": "workspace:*",
+    "@anthropic-ai/sdk": "^0.82.0",
+    "@prisma/client": "^5.14.0",
     "@social-bot/config": "workspace:*",
+    "@social-bot/domain": "workspace:*",
     "@social-bot/observability": "workspace:*",
     "bullmq": "^5.8.3",
     "ioredis": "^5.4.1"

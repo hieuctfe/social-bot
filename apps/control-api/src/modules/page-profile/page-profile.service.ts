@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePageProfileDto } from './dto/create-page-profile.dto';
 import { UpdatePageProfileDto } from './dto/update-page-profile.dto';
@@ -6,7 +8,10 @@ import { PageProfile, PageProfileStatus } from '@prisma/client';
 
 @Injectable()
 export class PageProfileService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @InjectQueue('content-generation') private contentGenerationQueue: Queue,
+  ) {}
 
   async create(
     workspaceId: string,
@@ -144,5 +149,22 @@ export class PageProfileService {
     });
 
     return dueProfiles;
+  }
+
+  async triggerContentGeneration(workspaceId: string, id: string) {
+    // Verify the PageProfile exists and belongs to the workspace
+    const pageProfile = await this.findOne(workspaceId, id);
+
+    // Queue the content generation job
+    const job = await this.contentGenerationQueue.add('generate-content', {
+      pageProfileId: id,
+      workspaceId,
+    });
+
+    return {
+      message: 'Content generation queued successfully',
+      pageProfileId: id,
+      jobId: job.id,
+    };
   }
 }

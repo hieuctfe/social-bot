@@ -91,4 +91,15 @@ export class PageProfileController {
   findDueForContent() {
     return this.pageProfileService.findDueForContent();
   }
+
+  @Post('workspaces/:workspaceId/page-profiles/:id/generate-content')
+  @ApiOperation({ summary: 'Trigger content generation for a PageProfile' })
+  @ApiResponse({ status: 200, description: 'Content generation job queued' })
+  @ApiResponse({ status: 404, description: 'PageProfile not found' })
+  async generateContent(
+    @Param('workspaceId') workspaceId: string,
+    @Param('id') id: string,
+  ) {
+    return this.pageProfileService.triggerContentGeneration(workspaceId, id);
+  }
 }
