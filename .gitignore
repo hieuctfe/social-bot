@@ -38,3 +38,4 @@ coverage/
 
 # pnpm
 .pnpm-store/
+.env.local-services

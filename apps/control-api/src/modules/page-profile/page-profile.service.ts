@@ -121,7 +121,9 @@ export class PageProfileService {
 
       // Check if current time matches any scheduled time (±5 minutes)
       const isDue = schedule.times.some((time: string) => {
-        const [hour, minute] = time.split(':').map(Number);
+        const parts = time.split(':').map(Number);
+        const hour = parts[0] ?? 0;
+        const minute = parts[1] ?? 0;
         const diff = Math.abs(
           currentHour * 60 + currentMinute - (hour * 60 + minute),
         );
