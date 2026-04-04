@@ -18,6 +18,7 @@ import { AIPolicyModule } from './modules/ai-policy/ai-policy.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { PostizModule } from './modules/postiz/postiz.module';
 import { WebhookModule } from './modules/webhook/webhook.module';
+import { PageProfileModule } from './modules/page-profile/page-profile.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { WebhookModule } from './modules/webhook/webhook.module';
     StorageModule,
     PostizModule,
     WebhookModule,
+    PageProfileModule,
   ],
 })
 export class AppModule {}
