@@ -17,7 +17,7 @@ export class AssetController {
   @Post('upload')
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }))
   upload(
     @Param('wsId') wsId: string,
     @UploadedFile() file: Express.Multer.File,

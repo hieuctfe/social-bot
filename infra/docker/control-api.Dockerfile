@@ -4,7 +4,7 @@ RUN apk add --no-cache openssl
 RUN corepack enable && corepack prepare pnpm@9.1.4 --activate
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc* ./
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/config/package.json ./packages/config/
 COPY packages/postiz-client/package.json ./packages/postiz-client/
@@ -21,6 +21,9 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Generate Prisma client before building (required for TypeScript types)
+RUN node_modules/.bin/prisma generate --schema=apps/control-api/prisma/schema.prisma
 
 # Build workspace packages first, then the app
 RUN pnpm --filter @social-bot/domain build

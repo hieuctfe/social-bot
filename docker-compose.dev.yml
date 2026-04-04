@@ -255,17 +255,19 @@ services:
       REDIS_URL: redis://redis:6379
       # Internal URL for server-side Next.js → backend calls (container DNS)
       BACKEND_INTERNAL_URL: http://postiz:3000
-      # Public URL the BROWSER uses to call the backend — must be host-reachable
-      NEXT_PUBLIC_BACKEND_URL: http://localhost:3001
-      FRONTEND_URL: http://postiz:4200
-      MAIN_URL: http://localhost:4200
+      # Public URL the BROWSER uses to call the backend — routed through nginx /api
+      NEXT_PUBLIC_BACKEND_URL: ${PUBLIC_URL:-http://localhost:4200}/api
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost:4200}
+      MAIN_URL: ${PUBLIC_URL:-http://localhost:4200}
+      # Explicit cookie domain — prevents Postiz from incorrectly extracting .ts.net (public suffix)
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-localhost}
       IS_GENERAL: "true"
       JWT_SECRET: ${JWT_SECRET:-change-me}
       TEMPORAL_ADDRESS: temporal:7233
       # Storage Configuration (required for media uploads)
       STORAGE_PROVIDER: local
       UPLOAD_DIRECTORY: /uploads
-      NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: http://localhost:4200
+      NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: ${PUBLIC_URL:-http://localhost:4200}
       # OAuth Credentials (see docs/POSTIZ_OAUTH_SETUP.md)
       FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
       FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}

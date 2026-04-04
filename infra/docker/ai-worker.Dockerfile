@@ -4,7 +4,7 @@ RUN apk add --no-cache openssl
 RUN corepack enable && corepack prepare pnpm@9.1.4 --activate
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc* ./
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/config/package.json ./packages/config/
 COPY packages/observability/package.json ./packages/observability/

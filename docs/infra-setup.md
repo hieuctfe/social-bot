@@ -114,6 +114,16 @@ docker compose -f docker-compose.dev.yml ps temporal
 docker compose -f docker-compose.dev.yml logs temporal | tail -20
 ```
 
+### Postiz login flickers (login → redirect → login) on PaaS/tunnel hostnames
+
+**Symptoms**: Clicking "Login" redirects back to the login page immediately; no auth cookie visible in browser DevTools → Application → Cookies.
+
+**Root cause**: Postiz derives the `Set-Cookie` domain from `FRONTEND_URL` using the `tldts` library (`getCookieUrlFromDomain` in `subdomain.management.js`). For any hostname under a [Public Suffix List](https://publicsuffix.org/) (PSL) entry — Tailscale `*.ts.net`, Vercel `*.vercel.app`, Railway `*.up.railway.app`, GitHub Pages `*.github.io`, etc. — `tldts` returns the PSL entry itself (e.g. `ts.net`) as the registered domain. Browsers reject cookies scoped to a PSL entry, so the auth cookie is never stored.
+
+**Fix (already applied)**: `infra/nginx/postiz-proxy.conf` uses `proxy_cookie_domain ~^\.(.+)$ $host;` in the `/api/` location to rewrite any wildcard `Domain=.X` to the exact `$host` value before the response reaches the browser. This is generic — it works for any deployment URL without config changes.
+
+**If you bypass nginx** (e.g., access Postiz directly on port 3001): you'll hit this bug again. Always access Postiz through the nginx proxy on port 4200.
+
 ### Postiz login shows `/auth/undefined/auth/login`
 `NEXT_PUBLIC_BACKEND_URL` is not set in the Postiz container environment. Verify the compose file has:
 ```yaml
@@ -138,3 +148,16 @@ docker compose -f docker-compose.dev.yml up -d
 
 ### Prisma client not initialized in Docker
 Ensure `prisma` is in `dependencies` (not `devDependencies`) in `apps/control-api/package.json`, and that the Dockerfile runs `prisma generate` inside `/app/standalone` in the builder stage.
+
+---
+
+## Fresh Machine — Known Build Fixes
+
+When setting up on a new machine (no Docker cache), several issues surface that don't appear on the original dev machine. These have already been fixed in the repo, but documented here for context:
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| `error TS2688: Cannot find type definition file for 'node'` | pnpm doesn't hoist devDeps across packages in Docker | `.npmrc` with `shamefully-hoist=true` + copied in all Dockerfiles |
+| `nest build` fails — Prisma types missing | `prisma generate` hadn't run before TypeScript compilation | Added `prisma generate` step in `control-api.Dockerfile` builder stage before `nest build` |
+| `dashboard-web` crashes — `Cannot find module 'next'` | Next.js standalone file tracing doesn't follow pnpm symlinks | Dropped standalone mode; `dashboard-web.Dockerfile` now uses `pnpm deploy` + `next start` |
+| Dockerfile COPY fails for `public/` | Directory didn't exist (git doesn't track empty dirs) | Created `apps/dashboard-web/public/.gitkeep` |
