@@ -84,6 +84,26 @@ enum ActionOutcome {
   PENDING
 }
 
+enum PageProfileStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum ContentStrategyType {
+  REPOST
+  NEWS
+  AI_GENERATED
+  MIXED
+}
+
+enum ContentStyle {
+  PROFESSIONAL
+  FUNNY
+  EDUCATIONAL
+  VIRAL
+}
+
 // ─── Models ──────────────────────────────────────────────────
 
 model Organization {
@@ -122,6 +142,7 @@ model Workspace {
   automationRuns    AutomationRun[]
   aiPolicies        AIPolicy[]
   actionLogs        ActionLog[]
+  pageProfiles      PageProfile[]
 
   @@unique([organizationId, slug])
   @@map("workspaces")
@@ -223,6 +244,7 @@ model ContentDraft {
   workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   publishTargets   PublishTarget[]
   approvalRequests ApprovalRequest[]
+  contentArchive   ContentArchive?
 
   @@map("content_drafts")
 }
@@ -323,4 +345,78 @@ model AIPolicy {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("ai_policies")
+}
+
+// ─── Content Automation Models ───────────────────────────────
+
+model PageProfile {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId String
+  name        String
+  niche       String
+  description String?
+  
+  // Content Strategy (stored as JSON for flexibility)
+  contentStrategy Json // { type, sources?, keywords?, topics?, style }
+  
+  // Platform Connections (references existing SocialConnection IDs)
+  socialConnectionIds String[] @default([])
+  
+  // Posting Schedule (stored as JSON)
+  schedule Json // { frequency, times[], timezone }
+  
+  // AI Configuration (stored as JSON)
+  aiConfig Json // { generationModel, qaEnabled, minQualityScore, maxRetries }
+  
+  // State
+  status     PageProfileStatus @default(ACTIVE)
+  lastPostAt DateTime?
+  
+  // Stats (stored as JSON)
+  stats Json @default("{\"totalPosts\": 0, \"avgQualityScore\": 0, \"failedGenerations\": 0}")
+  
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contentArchives ContentArchive[]
+  
+  @@map("page_profiles")
+}
+
+model ContentArchive {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pageProfileId  String
+  contentDraftId String @unique
+  
+  // Content snapshot
+  body      String   @db.Text
+  hashtags  String[] @default([])
+  mediaUrls String[] @default([])
+  
+  // Generation metadata
+  generatedBy     String  // 'rss-repost', 'news-scraper', 'ai-original'
+  sourceUrl       String?
+  generationModel String? // 'gpt-4', 'claude-sonnet-4.5', etc.
+  
+  // QA metadata
+  qaScore        Float
+  qaAttempts     Int   @default(1)
+  qaAgentResults Json? // Individual agent scores + feedback
+  
+  // Publishing metadata
+  publishedAt DateTime?
+  platforms   String[] @default([]) // ['facebook', 'instagram']
+  
+  // Performance (fetched later from Postiz)
+  performance Json? // { likes, shares, comments, reach }
+  
+  pageProfile  PageProfile  @relation(fields: [pageProfileId], references: [id], onDelete: Cascade)
+  contentDraft ContentDraft @relation(fields: [contentDraftId], references: [id], onDelete: Cascade)
+  
+  @@index([pageProfileId, createdAt])
+  @@map("content_archives")
 }
