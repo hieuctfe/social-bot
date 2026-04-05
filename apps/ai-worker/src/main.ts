@@ -1,3 +1,8 @@
+import { config } from 'dotenv';
+// Load .env.local first (local overrides), then .env
+config({ path: '.env.local' });
+config({ path: '.env' });
+
 import { WorkerRunner } from './worker-runner';
 import { defaultLogger } from '@social-bot/observability';
 

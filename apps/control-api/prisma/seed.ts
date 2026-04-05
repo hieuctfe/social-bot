@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -19,19 +20,25 @@ async function main() {
   await prisma.workspace.deleteMany();
   await prisma.organization.deleteMany();
 
+  // Fixed IDs — must stay in sync with apps/dashboard-web/src/lib/demo-config.ts
+  const ORG_ID = 'cmnigh39t000011fr89eaez8x';
+  const WORKSPACE_ID = 'cmnigh39v000211fr0uvwigx5';
+  const MEMBER_ID = 'cmnigh39x000411frapbpiyhk';
+
   // ─── Create Default Organization ───────────────────────────
-  const org = await prisma.organization.create({
-    data: {
-      name: 'Social Bot',
-      slug: 'social-bot',
-      settings: {},
-    },
+  const org = await prisma.organization.upsert({
+    where: { id: ORG_ID },
+    update: { name: 'Social Bot', slug: 'social-bot' },
+    create: { id: ORG_ID, name: 'Social Bot', slug: 'social-bot', settings: {} },
   });
   console.log(`✅ Created organization: ${org.name} (${org.id})`);
 
   // ─── Create Default Workspace ──────────────────────────────
-  const workspace = await prisma.workspace.create({
-    data: {
+  const workspace = await prisma.workspace.upsert({
+    where: { id: WORKSPACE_ID },
+    update: { name: 'Main', slug: 'main' },
+    create: {
+      id: WORKSPACE_ID,
       organizationId: org.id,
       name: 'Main',
       slug: 'main',
@@ -41,11 +48,18 @@ async function main() {
   console.log(`✅ Created workspace: ${workspace.name} (${workspace.id})`);
 
   // ─── Create Admin User ─────────────────────────────────────
-  const adminMember = await prisma.member.create({
-    data: {
+  const DEFAULT_PASSWORD = process.env['ADMIN_PASSWORD'] ?? 'admin1234';
+  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+
+  const adminMember = await prisma.member.upsert({
+    where: { id: MEMBER_ID },
+    update: { email: 'admin@socialbot.local', displayName: 'Admin User', passwordHash },
+    create: {
+      id: MEMBER_ID,
       organizationId: org.id,
       userId: 'admin-user-001',
       email: 'admin@socialbot.local',
+      passwordHash,
       displayName: 'Admin User',
       avatarUrl: null,
     },
@@ -53,12 +67,10 @@ async function main() {
   console.log(`✅ Created member: ${adminMember.email} (${adminMember.id})`);
 
   // ─── Assign Admin Role to Workspace ────────────────────────
-  await prisma.roleBinding.create({
-    data: {
-      memberId: adminMember.id,
-      workspaceId: workspace.id,
-      role: 'OWNER',
-    },
+  await prisma.roleBinding.upsert({
+    where: { memberId_workspaceId: { memberId: adminMember.id, workspaceId: workspace.id } },
+    update: { role: 'OWNER' },
+    create: { memberId: adminMember.id, workspaceId: workspace.id, role: 'OWNER' },
   });
   console.log(`✅ Assigned OWNER role to ${adminMember.email} in workspace ${workspace.slug}`);
 

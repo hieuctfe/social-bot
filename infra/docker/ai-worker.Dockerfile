@@ -9,6 +9,8 @@ COPY packages/domain/package.json ./packages/domain/
 COPY packages/config/package.json ./packages/config/
 COPY packages/observability/package.json ./packages/observability/
 COPY apps/ai-worker/package.json ./apps/ai-worker/
+# Include control-api so prisma CLI gets installed
+COPY apps/control-api/package.json ./apps/control-api/
 
 RUN pnpm install --frozen-lockfile
 
@@ -28,6 +30,10 @@ RUN pnpm --filter ai-worker build
 
 # Deploy creates standalone with flat(ter) node_modules
 RUN pnpm --filter ai-worker deploy --prod /app/standalone
+
+# Copy prisma schema into standalone and generate client there
+RUN cp -r apps/control-api/prisma /app/standalone/prisma
+RUN cd /app/standalone && node_modules/.bin/prisma generate
 
 # ─── Stage 3: runner ─────────────────────────────────────────
 FROM node:20-alpine AS runner

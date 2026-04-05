@@ -1,0 +1,4 @@
+page_id,page_name,postiz_integration_id,strategy,niche,brand_voice,topics,posting_times,timezone,repost_source_connection_id,repost_delay_minutes,append_text,active
+,Bum Tech Page,YOUR_POSTIZ_INTEGRATION_ID,AI_GENERATED,tech,professional,"AI,startup,productivity","09:00,18:00",Asia/Ho_Chi_Minh,,,, TRUE
+,Bum Motivation,YOUR_POSTIZ_INTEGRATION_ID_2,AI_GENERATED,motivation,casual,"mindset,success,growth","08:00,20:00",Asia/Ho_Chi_Minh,,,, TRUE
+,Bum Repost Page,YOUR_POSTIZ_INTEGRATION_ID_3,REPOST,tech,professional,,,Asia/Ho_Chi_Minh,SOURCE_INTEGRATION_ID,30,#repost, FALSE

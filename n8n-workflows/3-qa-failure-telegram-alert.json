@@ -1,0 +1,54 @@
+{
+  "name": "Social Bot - QA Failure Telegram Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qa-failure-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "QA Failure Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=⚠️ *Content QA Failed*\n\nPage: *{{ $json.body.pageProfileName }}*\nAttempts: {{ $json.body.qaAttempts }}\nDraft ID: `{{ $json.body.draftId }}`\n\n*QA Results:*\n• Quality: {{ $json.body.qaResults?.quality?.pass ? '✅' : '❌' }} (score: {{ $json.body.qaResults?.quality?.score?.toFixed(1) }})\n• Brand Voice: {{ $json.body.qaResults?.brandVoice?.pass ? '✅' : '❌' }}\n• Compliance: {{ $json.body.qaResults?.compliance?.pass ? '✅' : '❌' }}\n• Originality: {{ $json.body.qaResults?.originality?.pass ? '✅' : '❌' }}\n\nPlease review in dashboard: {{ $env.DASHBOARD_URL }}/content-drafts/{{ $json.body.draftId }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-alert",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [470, 300],
+      "credentials": {
+        "telegramApi": { "id": "telegram-bot-cred", "name": "Telegram Bot" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [690, 300]
+    }
+  ],
+  "connections": {
+    "QA Failure Webhook": { "main": [[{ "node": "Send Telegram Alert", "type": "main", "index": 0 }]] },
+    "Send Telegram Alert": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Receives QA failure events from ai-worker logs (via log shipper or direct webhook call) and sends a Telegram alert. Set TELEGRAM_CHAT_ID and DASHBOARD_URL in n8n Variables."
+  }
+}

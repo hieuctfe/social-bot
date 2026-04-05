@@ -29,18 +29,10 @@
       "name": "Get Due PageProfiles",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [450, 300]
-    },
-    {
-      "parameters": {
-        "batchSize": 5,
-        "options": {}
-      },
-      "id": "batch-processor",
-      "name": "Process in Batches",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [650, 300]
+      "position": [450, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "control-api-auth", "name": "Control API JWT" }
+      }
     },
     {
       "parameters": {
@@ -54,19 +46,10 @@
       "name": "Trigger Content Generation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [850, 300]
-    },
-    {
-      "parameters": {
-        "amount": 30,
-        "unit": "seconds"
-      },
-      "id": "wait-processing",
-      "name": "Wait for AI Processing",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [1050, 300],
-      "webhookId": "wait-for-ai"
+      "position": [700, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "control-api-auth", "name": "Control API JWT" }
+      }
     },
     {
       "parameters": {
@@ -95,75 +78,27 @@
       "name": "Check Success",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1250, 300]
+      "position": [950, 300]
     }
   ],
   "pinData": {},
   "connections": {
     "Every Hour": {
-      "main": [
-        [
-          {
-            "node": "Get Due PageProfiles",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Get Due PageProfiles", "type": "main", "index": 0 }]]
     },
     "Get Due PageProfiles": {
-      "main": [
-        [
-          {
-            "node": "Process in Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Process in Batches": {
-      "main": [
-        [
-          {
-            "node": "Trigger Content Generation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Trigger Content Generation", "type": "main", "index": 0 }]]
     },
     "Trigger Content Generation": {
-      "main": [
-        [
-          {
-            "node": "Wait for AI Processing",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait for AI Processing": {
-      "main": [
-        [
-          {
-            "node": "Check Success",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Check Success", "type": "main", "index": 0 }]]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "1",
   "meta": {
     "instanceId": "social-bot-automation"
   },
-  "id": "daily-content-generation",
   "tags": []
 }

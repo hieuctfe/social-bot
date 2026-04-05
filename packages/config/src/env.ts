@@ -24,6 +24,7 @@ export const apiEnvSchema = baseEnvSchema.extend({
 
   // n8n
   N8N_WEBHOOK_URL: z.string().optional(),
+  N8N_QA_FAILURE_WEBHOOK_URL: z.string().optional(),
   CONTROL_API_WEBHOOK_SECRET: z.string().optional(),
 
   // AI (placeholder)

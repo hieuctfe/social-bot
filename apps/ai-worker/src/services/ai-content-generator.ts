@@ -12,6 +12,7 @@ interface PageProfile {
     type: string;
     style?: string;
     topics?: string[];
+    qaFeedback?: string; // Injected on retry with QA failure reason
   };
   aiConfig: {
     generationModel?: string;
@@ -43,11 +44,16 @@ export async function generateAIContent(
   const topics = contentStrategy.topics?.join(', ') || 'general topics';
   const profileDesc = description || `a ${niche} focused page`;
 
+  const qaFeedback = contentStrategy.qaFeedback || '';
+  const retrySection = qaFeedback
+    ? `\nIMPORTANT — This is a retry. Previous attempt failed QA with these issues:\n${qaFeedback}\nFix all listed issues in your new version.\n`
+    : '';
+
   const prompt = `You are a ${style} content creator for a ${niche} niche social media page.
 
 Page description: ${profileDesc}
 Topics to focus on: ${topics}
-
+${retrySection}
 Generate a social media post that:
 1. Is engaging and matches the ${style} style
 2. Is 150-300 words (concise and punchy)
@@ -73,7 +79,7 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no code 
 
     // Call Claude API
     const response = await anthropic.messages.create({
-      model: aiConfig.generationModel || 'claude-3-5-sonnet-20241022',
+      model: aiConfig.generationModel || 'claude-sonnet-4-6',
       max_tokens: 1024,
       messages: [
         {

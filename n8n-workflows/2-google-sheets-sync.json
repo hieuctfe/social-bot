@@ -1,0 +1,154 @@
+{
+  "name": "Social Bot - Google Sheets Page Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 5 }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_SHEETS_DOC_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Pages",
+          "mode": "name"
+        },
+        "options": { "headerRow": 1 }
+      },
+      "id": "read-sheets",
+      "name": "Read Pages Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [470, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "google-sheets-cred", "name": "Google Sheets" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "id": "active-filter",
+              "leftValue": "={{ $json.active }}",
+              "rightValue": "TRUE",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "filter-active",
+      "name": "Filter Active Rows",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "rows"
+      },
+      "id": "aggregate",
+      "name": "Aggregate Rows",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://control-api:4000/api/v1/workspaces/{{ $env.WORKSPACE_ID }}/automations/sync-page-profiles",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ rows: $json.rows.map(r => ({ page_id: r.page_id || undefined, page_name: r.page_name, postiz_integration_id: r.postiz_integration_id, strategy: r.strategy, niche: r.niche, brand_voice: r.brand_voice, topics: r.topics, posting_times: r.posting_times, timezone: r.timezone || 'Asia/Ho_Chi_Minh', repost_source_connection_id: r.repost_source_connection_id || undefined, repost_delay_minutes: r.repost_delay_minutes ? parseInt(r.repost_delay_minutes) : 30, append_text: r.append_text || undefined, active: r.active === 'TRUE' })), workspaceId: $env.WORKSPACE_ID }) }}",
+        "options": {}
+      },
+      "id": "sync-profiles",
+      "name": "Sync to Control API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1130, 300],
+      "credentials": {
+        "httpHeaderAuth": { "id": "control-api-auth", "name": "Control API JWT" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.errors.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        }
+      },
+      "id": "check-errors",
+      "name": "Has Errors?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "level": "warning",
+        "message": "=Google Sheets sync completed with errors:\n{{ $json.errors.join('\\n') }}\n\nCreated: {{ $json.created }}, Updated: {{ $json.updated }}, Deactivated: {{ $json.deactivated }}"
+      },
+      "id": "log-errors",
+      "name": "Log Errors",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [1570, 220]
+    },
+    {
+      "parameters": {
+        "level": "info",
+        "message": "=Google Sheets sync OK — Created: {{ $json.created }}, Updated: {{ $json.updated }}, Deactivated: {{ $json.deactivated }}"
+      },
+      "id": "log-success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1570, 400]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": { "main": [[{ "node": "Read Pages Sheet", "type": "main", "index": 0 }]] },
+    "Read Pages Sheet": { "main": [[{ "node": "Filter Active Rows", "type": "main", "index": 0 }]] },
+    "Filter Active Rows": { "main": [[{ "node": "Aggregate Rows", "type": "main", "index": 0 }]] },
+    "Aggregate Rows": { "main": [[{ "node": "Sync to Control API", "type": "main", "index": 0 }]] },
+    "Sync to Control API": { "main": [[{ "node": "Has Errors?", "type": "main", "index": 0 }]] },
+    "Has Errors?": {
+      "main": [
+        [{ "node": "Log Errors", "type": "main", "index": 0 }],
+        [{ "node": "Log Success", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Reads the 'Pages' tab in Google Sheets every 5 minutes and syncs PageProfiles to control-api. Set GOOGLE_SHEETS_DOC_ID and WORKSPACE_ID in n8n Variables before activating."
+  }
+}

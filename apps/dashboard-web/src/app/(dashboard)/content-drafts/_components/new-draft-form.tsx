@@ -1,11 +1,12 @@
 'use client';
+import { WORKSPACE_ID } from '@/lib/demo-config';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 
-const DEMO_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbW5pZ2gzOXgwMDA0MTFmcmFwYnBpeWhrIiwiZW1haWwiOiJhZG1pbkBzb2NpYWxib3QubG9jYWwiLCJvcmdhbml6YXRpb25JZCI6ImNtbmlnaDM5dDAwMDAxMWZyODllYWV6OHgiLCJpYXQiOjE3NzUxOTgzMTAsImV4cCI6MTc3NTgwMzExMH0.cG-MsIY4TWysGPzP0CVIsawhfrT7idm0I3HK_Lq9GIw';
-const WORKSPACE_ID = 'cmnigh39v000211fr0uvwigx5';
+
+
 
 interface FormData {
   title: string;
@@ -63,7 +64,6 @@ export function NewDraftForm() {
       const draft = await apiClient.post(
         `/workspaces/${WORKSPACE_ID}/content-drafts`,
         formData,
-        DEMO_TOKEN
       );
 
       router.push(`/content-drafts/${(draft as {id: string}).id}`);

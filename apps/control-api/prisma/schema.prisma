@@ -156,6 +156,7 @@ model Member {
   organizationId String
   userId         String
   email          String
+  passwordHash   String?
   displayName    String
   avatarUrl      String?
 

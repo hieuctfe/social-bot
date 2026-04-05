@@ -7,9 +7,12 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "dev": "docker compose -f docker-compose.dev.yml up",
+    "infra": "docker compose -f docker-compose.infra.yml up -d",
+    "infra:down": "docker compose -f docker-compose.infra.yml down",
     "dev:api": "pnpm --filter control-api dev",
     "dev:web": "pnpm --filter dashboard-web dev",
     "dev:worker": "pnpm --filter ai-worker dev",
+    "dev:local": "pnpm --filter control-api dev & pnpm --filter ai-worker dev",
     "db:generate": "pnpm --filter control-api db:generate",
     "db:migrate": "pnpm --filter control-api db:migrate",
     "db:studio": "pnpm --filter control-api db:studio"

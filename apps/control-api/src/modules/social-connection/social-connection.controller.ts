@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SocialConnectionService } from './social-connection.service';
 import { CreateSocialConnectionDto } from './dto/create-social-connection.dto';
@@ -29,5 +29,15 @@ export class SocialConnectionController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.socialConnectionService.remove(id);
+  }
+
+  @Post('sync-from-postiz')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sync social accounts from Postiz',
+    description: 'Fetches all connected integrations from Postiz and upserts them as SocialConnections in this workspace.',
+  })
+  syncFromPostiz(@Param('wsId') wsId: string) {
+    return this.socialConnectionService.syncFromPostiz(wsId);
   }
 }
